@@ -26,22 +26,18 @@ function P(){const L=level-1,E=[.86,.91,.96][L]||1,G2=[40,26,12][L]||0;return{sp
 let deathK='hit';function reset(){a={x:W*.28,y:H*.45,v:0};obs=[];passed=0;need=P().need;spawnT=0;heaven=null;msgT=110;zone=zoneOf(level)}
 let paused=false,muted=localStorage.getItem('angelMute')=='1',dp=null;
 // quiet sound effects only (no music)
-let ac,nzB,lastFart=-1;function acGet(){ac=ac||new(window.AudioContext||webkitAudioContext)();if(ac.state=='suspended')ac.resume();return ac}
+let ac,nzB,lastFlap=-1;function acGet(){ac=ac||new(window.AudioContext||webkitAudioContext)();if(ac.state=='suspended')ac.resume();return ac}
 function unlockAC(){if(muted)return;try{acGet()}catch(e){}}['pointerup','touchend','click','keydown'].forEach(ev=>addEventListener(ev,unlockAC,{passive:true}));
-// original synthesized cartoon fart (sawtooth buzz + flutter + a puff of noise), quiet, varied, rate limited
-function fart(){const A=acGet(),n=A.currentTime,gap=n-lastFart;if(lastFart>=0&&gap<.17)return;lastFart=n;
-const quick=gap<.45,R=Math.random,d=quick?.11+R()*.09:.2+R()*.28,f0=58+R()*62,v=quick?.045:.07,squeak=R()<.22;
-const o=A.createOscillator(),lfo=A.createOscillator(),lg=A.createGain(),flt=A.createBiquadFilter(),g=A.createGain(),am=A.createGain(),amL=A.createGain();
-o.type='sawtooth';o.frequency.setValueAtTime(f0*(squeak?1.6:1.15),n);o.frequency.exponentialRampToValueAtTime(squeak?f0*2.6:f0*.7,n+d);
-lfo.type='square';lfo.frequency.setValueAtTime(16+R()*18,n);lfo.frequency.linearRampToValueAtTime(10+R()*8,n+d);lg.gain.value=f0*.3;lfo.connect(lg);lg.connect(o.frequency);
-amL.gain.value=.45;lfo.connect(amL);amL.connect(am.gain);am.gain.value=.6;
-flt.type='lowpass';flt.frequency.setValueAtTime(squeak?1400:700+R()*400,n);flt.frequency.exponentialRampToValueAtTime(260,n+d);flt.Q.value=3;
-g.gain.setValueAtTime(0,n);g.gain.linearRampToValueAtTime(v,n+.012);g.gain.setValueAtTime(v*.85,n+d*.55);g.gain.exponentialRampToValueAtTime(.001,n+d);
-o.connect(flt);flt.connect(am);am.connect(g);g.connect(A.destination);o.start(n);lfo.start(n);o.stop(n+d+.05);lfo.stop(n+d+.05);
+// soft original wing-flap whoosh (filtered noise swept down + faint low thump), quiet, slight variety, rate limited
+function whoosh(){const A=acGet(),n=A.currentTime,gap=n-lastFlap;if(lastFlap>=0&&gap<.17)return;lastFlap=n;
+const R=Math.random,quick=gap<.45,d=quick?.12+R()*.05:.17+R()*.08,v=quick?.03:.042,f=900+R()*500;
 if(!nzB){nzB=A.createBuffer(1,A.sampleRate*.6|0,A.sampleRate);const ch=nzB.getChannelData(0);for(let i=0;i<ch.length;i++)ch[i]=R()*2-1}
-const ns=A.createBufferSource(),nf=A.createBiquadFilter(),ng=A.createGain();ns.buffer=nzB;nf.type='bandpass';nf.frequency.value=220+R()*180;nf.Q.value=1.2;
-ng.gain.setValueAtTime(0,n);ng.gain.linearRampToValueAtTime(v*.5,n+.01);ng.gain.exponentialRampToValueAtTime(.001,n+d*.9);ns.connect(nf);nf.connect(ng);ng.connect(A.destination);ns.start(n);ns.stop(n+d)}
-function snd(kind){if(muted)return;try{if(kind=='flap'){fart();return}acGet();
+const ns=A.createBufferSource(),nf=A.createBiquadFilter(),ng=A.createGain();ns.buffer=nzB;nf.type='bandpass';nf.Q.value=.9;
+nf.frequency.setValueAtTime(f,n);nf.frequency.exponentialRampToValueAtTime(f*.45,n+d);
+ng.gain.setValueAtTime(0,n);ng.gain.linearRampToValueAtTime(v,n+d*.3);ng.gain.exponentialRampToValueAtTime(.001,n+d);ns.connect(nf);nf.connect(ng);ng.connect(A.destination);ns.start(n,R()*.3);ns.stop(n+d+.02);
+const o=A.createOscillator(),g=A.createGain();o.type='sine';o.frequency.setValueAtTime(150+R()*40,n);o.frequency.exponentialRampToValueAtTime(90,n+.09);
+g.gain.setValueAtTime(0,n);g.gain.linearRampToValueAtTime(v*.35,n+.01);g.gain.exponentialRampToValueAtTime(.001,n+.1);o.connect(g);g.connect(A.destination);o.start(n);o.stop(n+.12)}
+function snd(kind){if(muted)return;try{if(kind=='flap'){whoosh();return}acGet();
 const n=ac.currentTime,seq=kind=='key'?[[660,0],[880,.09],[1046,.18]]:kind=='bonk'?[[150,0]]:[[520,0]];
 seq.forEach(([f,d])=>{const o=ac.createOscillator(),g=ac.createGain();o.type=kind=='bonk'?'sine':'triangle';o.frequency.setValueAtTime(f,n+d);o.frequency.exponentialRampToValueAtTime(f*(kind=='flap'?.72:kind=='bonk'?.5:1),n+d+.14);
 g.gain.setValueAtTime(0,n+d);g.gain.linearRampToValueAtTime(kind=='flap'?.035:.05,n+d+.015);g.gain.exponentialRampToValueAtTime(.001,n+d+(kind=='key'?.3:.16));o.connect(g);g.connect(ac.destination);o.start(n+d);o.stop(n+d+.35)})}catch(e){}}
