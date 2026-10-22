@@ -26,7 +26,22 @@ function P(){const L=level-1,E=[.86,.91,.96][L]||1,G2=[40,26,12][L]||0;return{sp
 let deathK='hit';function reset(){a={x:W*.28,y:H*.45,v:0};obs=[];passed=0;need=P().need;spawnT=0;heaven=null;msgT=110;zone=zoneOf(level)}
 let paused=false,muted=localStorage.getItem('angelMute')=='1',dp=null;
 // quiet sound effects only (no music)
-let ac;function snd(kind){if(muted)return;try{ac=ac||new(window.AudioContext||webkitAudioContext)();if(ac.state=='suspended')ac.resume();
+let ac,nzB,lastFart=-1;function acGet(){ac=ac||new(window.AudioContext||webkitAudioContext)();if(ac.state=='suspended')ac.resume();return ac}
+function unlockAC(){if(muted)return;try{acGet()}catch(e){}}['pointerup','touchend','click','keydown'].forEach(ev=>addEventListener(ev,unlockAC,{passive:true}));
+// original synthesized cartoon fart (sawtooth buzz + flutter + a puff of noise), quiet, varied, rate limited
+function fart(){const A=acGet(),n=A.currentTime,gap=n-lastFart;if(lastFart>=0&&gap<.17)return;lastFart=n;
+const quick=gap<.45,R=Math.random,d=quick?.11+R()*.09:.2+R()*.28,f0=58+R()*62,v=quick?.045:.07,squeak=R()<.22;
+const o=A.createOscillator(),lfo=A.createOscillator(),lg=A.createGain(),flt=A.createBiquadFilter(),g=A.createGain(),am=A.createGain(),amL=A.createGain();
+o.type='sawtooth';o.frequency.setValueAtTime(f0*(squeak?1.6:1.15),n);o.frequency.exponentialRampToValueAtTime(squeak?f0*2.6:f0*.7,n+d);
+lfo.type='square';lfo.frequency.setValueAtTime(16+R()*18,n);lfo.frequency.linearRampToValueAtTime(10+R()*8,n+d);lg.gain.value=f0*.3;lfo.connect(lg);lg.connect(o.frequency);
+amL.gain.value=.45;lfo.connect(amL);amL.connect(am.gain);am.gain.value=.6;
+flt.type='lowpass';flt.frequency.setValueAtTime(squeak?1400:700+R()*400,n);flt.frequency.exponentialRampToValueAtTime(260,n+d);flt.Q.value=3;
+g.gain.setValueAtTime(0,n);g.gain.linearRampToValueAtTime(v,n+.012);g.gain.setValueAtTime(v*.85,n+d*.55);g.gain.exponentialRampToValueAtTime(.001,n+d);
+o.connect(flt);flt.connect(am);am.connect(g);g.connect(A.destination);o.start(n);lfo.start(n);o.stop(n+d+.05);lfo.stop(n+d+.05);
+if(!nzB){nzB=A.createBuffer(1,A.sampleRate*.6|0,A.sampleRate);const ch=nzB.getChannelData(0);for(let i=0;i<ch.length;i++)ch[i]=R()*2-1}
+const ns=A.createBufferSource(),nf=A.createBiquadFilter(),ng=A.createGain();ns.buffer=nzB;nf.type='bandpass';nf.frequency.value=220+R()*180;nf.Q.value=1.2;
+ng.gain.setValueAtTime(0,n);ng.gain.linearRampToValueAtTime(v*.5,n+.01);ng.gain.exponentialRampToValueAtTime(.001,n+d*.9);ns.connect(nf);nf.connect(ng);ng.connect(A.destination);ns.start(n);ns.stop(n+d)}
+function snd(kind){if(muted)return;try{if(kind=='flap'){fart();return}acGet();
 const n=ac.currentTime,seq=kind=='key'?[[660,0],[880,.09],[1046,.18]]:kind=='bonk'?[[150,0]]:[[520,0]];
 seq.forEach(([f,d])=>{const o=ac.createOscillator(),g=ac.createGain();o.type=kind=='bonk'?'sine':'triangle';o.frequency.setValueAtTime(f,n+d);o.frequency.exponentialRampToValueAtTime(f*(kind=='flap'?.72:kind=='bonk'?.5:1),n+d+.14);
 g.gain.setValueAtTime(0,n+d);g.gain.linearRampToValueAtTime(kind=='flap'?.035:.05,n+d+.015);g.gain.exponentialRampToValueAtTime(.001,n+d+(kind=='key'?.3:.16));o.connect(g);g.connect(ac.destination);o.start(n+d);o.stop(n+d+.35)})}catch(e){}}
@@ -122,12 +137,19 @@ x.restore()}
 // ---------- backgrounds per stage ----------
 function castleSil(x0,base,sc,col){x.fillStyle=col;const b=(l,w,h)=>{x.fillRect(x0+l*sc,base-h*sc,w*sc,h*sc);for(let k=0;k<w;k+=8)x.fillRect(x0+(l+k)*sc,base-(h+6)*sc,4.5*sc,6*sc)};
 b(0,40,120);b(40,90,80);b(130,40,150);b(170,80,80);b(250,40,120);x.beginPath();x.moveTo(x0+128*sc,base-156*sc);x.lineTo(x0+150*sc,base-200*sc);x.lineTo(x0+172*sc,base-156*sc);x.fill();x.fillRect(x0+149*sc,base-222*sc,2*sc,24*sc);x.fillRect(x0+151*sc,base-222*sc,12*sc,7*sc)}
+// castle sits on its own hill: mound + foundation stones + grass, drawn with the castle so parallax can't separate them
+function keep(x0,base,sc,col,hill,rock,grass){castleSil(x0,base,sc,col);const L=x0-14*sc,Rr=x0+304*sc;
+ x.fillStyle=rock;for(let i=0,k=L;k<Rr;i++){const w=(16+(i*7)%11)*sc,hh=(9+(i*5)%6)*sc;rr(k,base-hh*.6,w-1.5*sc,hh,3*sc,rock);k+=w}
+ x.fillStyle=hill;x.beginPath();x.moveTo(x0-190*sc,H);x.bezierCurveTo(x0-120*sc,base+70*sc,x0-60*sc,base+6*sc,L,base+3*sc);
+ for(let k=L;k<=Rr;k+=12*sc)x.lineTo(k,base+3*sc-Math.sin(k/(9*sc))*1.6*sc);x.bezierCurveTo(x0+360*sc,base+6*sc,x0+420*sc,base+70*sc,x0+490*sc,H);x.closePath();x.fill();
+ x.fillStyle=rock;for(const [u,v,w] of [[-60,40,22],[-25,16,14],[320,22,16],[360,52,24],[40,28,12],[230,34,14]])rr(x0+u*sc,base+v*sc,w*sc,w*.62*sc,4*sc,rock);
+ x.fillStyle=grass;for(let k=L-6*sc;k<Rr+6*sc;k+=7*sc){const gh=(3+((k/sc)|0)%5)*sc;x.beginPath();x.moveTo(k,base+5*sc);x.lineTo(k+2.5*sc,base+3*sc-gh);x.lineTo(k+5*sc,base+5*sc);x.fill()}}
 function hills(y,amp,col,sp,ph){x.fillStyle=col;x.beginPath();x.moveTo(0,H);for(let xx=0;xx<=W+20;xx+=20*S){const u=(xx+scr*sp)/(260*S)+ph;x.lineTo(xx,y-Math.sin(u)*amp-Math.sin(u*2.3)*amp*.4)}x.lineTo(W,H);x.fill()}
 function grad(cs){const g=x.createLinearGradient(0,0,0,H);cs.forEach((cl,i)=>g.addColorStop(i/(cs.length-1),cl));x.fillStyle=g;x.fillRect(0,0,W,H)}
 function cloudy(al){x.fillStyle=`rgba(255,255,255,${al})`;for(const cl of clouds){cl.x-=.0003*cl.s;if(cl.x<-.3)cl.x=1.2;const cx=cl.x*W,cy=cl.y*H,r=26*S*cl.s;for(let i=0;i<4;i++){x.beginPath();x.arc(cx+i*r*.8,cy+(i%2)*r*.3,r,0,7);x.fill()}}}
 function sky(){const z=state=='title'?zoneOf(level):zone,rep=900*S,off=-(scr*.15)%rep;
-if(z==0){grad(['#5fb4ff','#bfe4ff','#e9f6ff']);cloudy(.75);for(let k=-1;k<W/rep+1;k++)castleSil(off+k*rep+300*S,H*.72,1.2*S,'#93a7c4');hills(H*.78,30*S,'#6fae5a',.3,0);hills(H*.86,22*S,'#4f9444',.55,2)}
-else if(z==1){grad(['#4e8fe0','#f6c98a','#ffe2b0']);cloudy(.5);for(let k=-1;k<W/rep+1;k++){castleSil(off+k*rep+100*S,H*.74,1.4*S,'#9a7f86')}hills(H*.82,26*S,'#6d8f4a',.4,1)}
+if(z==0){grad(['#5fb4ff','#bfe4ff','#e9f6ff']);cloudy(.75);for(let k=-1;k<W/rep+2;k++)keep(off+k*rep+300*S,H*.72,1.2*S,'#93a7c4','#7fae6c','#7f8ea6','#6a9e5c');hills(H*.78,30*S,'#6fae5a',.3,0);hills(H*.86,22*S,'#4f9444',.55,2)}
+else if(z==1){grad(['#4e8fe0','#f6c98a','#ffe2b0']);cloudy(.5);for(let k=-1;k<W/rep+2;k++){keep(off+k*rep+100*S,H*.74,1.4*S,'#9a7f86','#7f9156','#7e6870','#6a7f45')}hills(H*.82,26*S,'#6d8f4a',.4,1)}
 else if(z==2){grad(['#6fb6ff','#d7eeff']);cloudy(.6);const wy=H*.6;x.fillStyle='#8b919b';x.fillRect(0,wy,W,H*.28);for(let xx=-((scr*.35)%(40*S));xx<W;xx+=40*S)x.fillRect(xx,wy-16*S,22*S,16*S);
  x.strokeStyle='rgba(60,64,72,.5)';x.lineWidth=1.5*S;x.beginPath();for(let y=wy+24*S;y<H*.88;y+=24*S){x.moveTo(0,y);x.lineTo(W,y)}x.stroke();
  const my=H*.86;x.fillStyle='#2f6fa8';x.fillRect(0,my,W,H-my);x.strokeStyle='rgba(200,235,255,.6)';x.lineWidth=2*S;for(let r=0;r<3;r++){x.beginPath();for(let xx=0;xx<=W;xx+=12*S){const yy=my+14*S+r*28*S+Math.sin(xx/(30*S)+t*.06+r)*4*S;xx?x.lineTo(xx,yy):x.moveTo(xx,yy)}x.stroke()}}
@@ -136,7 +158,7 @@ else if(z==3){grad(['#120e16','#221c28','#141018']);const bw=56*S,bh=26*S,ox=(sc
 else if(z==4){grad(['#3a0e12','#5a1a1c','#2a0a0c']);const rp=380*S,o2=(scr*.3)%rp;for(let xx=-o2+rp*.25;xx<W+rp;xx+=rp){x.fillStyle='#14204a';x.beginPath();x.moveTo(xx,H*.62);x.lineTo(xx,H*.3);x.arc(xx+50*S,H*.3,50*S,Math.PI,0);x.lineTo(xx+100*S,H*.62);x.fill();x.fillStyle='rgba(220,230,255,.8)';cir(xx+66*S,H*.32,9*S,'rgba(240,240,255,.85)');x.strokeStyle='#2a1a10';x.lineWidth=4*S;x.beginPath();x.moveTo(xx+50*S,H*.25);x.lineTo(xx+50*S,H*.62);x.moveTo(xx,H*.44);x.lineTo(xx+100*S,H*.44);x.stroke();flame(xx+190*S,H*.5,1.2*S)}
  x.fillStyle='#2a1510';x.fillRect(0,H*.9,W,H*.1);x.fillStyle='#7a1a1e';x.fillRect(0,H*.9,W,6*S)}
 else {grad(['#1c0f3e','#6a2a7a','#f08a4a','#ffd08a']);for(const st of stars){x.fillStyle=`rgba(255,255,230,${.4+.5*Math.abs(Math.sin(t*.03+st.s*9))})`;x.fillRect(st.x*W,st.y*H,2.5*S,2.5*S)}cir(W*.8,H*.2,40*S,'rgba(255,240,200,.9)');
- for(let k=-1;k<W/rep+1;k++)castleSil(off+k*rep+200*S,H*.8,2*S,'#3a1a40');hills(H*.88,14*S,'#2a1230',.5,3)}}
+ for(let k=-1;k<W/rep+2;k++)keep(off+k*rep+200*S,H*.8,2*S,'#3a1a40','#301536','#2a1030','#3a1c3e');hills(H*.88,14*S,'#2a1230',.5,3)}}
 // ---------- the goal: golden key (crown on level 99) ----------
 function goal(h){x.save();x.translate(h.x,h.y);const s=S,b=Math.sin(t*.08)*4*s;x.translate(0,b);const g=x.createRadialGradient(0,0,2,0,0,52*s);g.addColorStop(0,'rgba(255,230,120,.6)');g.addColorStop(1,'rgba(255,230,120,0)');x.fillStyle=g;x.fillRect(-52*s,-52*s,104*s,104*s);
 if(level>=99){crown(0,0,2.4*s)}else{x.rotate(Math.sin(t*.05)*.2);x.strokeStyle='#ffcc2e';x.lineWidth=6*s;x.beginPath();x.arc(-16*s,0,11*s,0,7);x.stroke();x.fillStyle='#ffcc2e';x.fillRect(-5*s,-3.5*s,36*s,7*s);x.fillRect(18*s,3*s,5*s,10*s);x.fillRect(26*s,3*s,5*s,7*s);x.strokeStyle='#fff3b0';x.lineWidth=2*s;x.beginPath();x.arc(-16*s,0,11*s,3.6,4.6);x.stroke()}
